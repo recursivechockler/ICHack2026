@@ -6,7 +6,9 @@ contextBridge.exposeInMainWorld("api", {
   forward: () => ipcRenderer.send("nav:forward"),
   reload: () => ipcRenderer.send("nav:reload"),
   extractReader: () => ipcRenderer.send("reader:extract"),
+  toggleBoring: () => ipcRenderer.send("boring:toggle"),
 
   onUrl: (fn) => ipcRenderer.on("ui:url", (_e, url) => fn(url)),
-  onToast: (fn) => ipcRenderer.on("ui:toast", (_e, msg) => fn(msg))
+  onToast: (fn) => ipcRenderer.on("ui:toast", (_e, msg) => fn(msg)),
+  onBoringState: (fn) => ipcRenderer.on("ui:boring-state", (_e, enabled) => fn(enabled))
 });

@@ -1,8 +1,20 @@
 const { app, BrowserWindow, BrowserView, ipcMain, session } = require("electron");
 const path = require("path");
+const fs = require("fs");
 
 let mainWindow = null;
 let view = null;
+let boringModeEnabled = true; // Boring mode on by default
+
+// Site detection - maps hostnames to module names
+function getSiteModule(hostname) {
+  if (hostname.includes("youtube.com")) return "youtube";
+  if (hostname.includes("bbc.com") || hostname.includes("bbc.co.uk")) return "news";
+  if (hostname.includes("theguardian.com")) return "news";
+  if (hostname.includes("asos.com")) return "shopping";
+  if (hostname.includes("zara.com")) return "shopping";
+  return null;
+}
 
 function openReaderWindow(article, sourceUrl) {
   const readerWin = new BrowserWindow({
@@ -41,6 +53,11 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
+  // Send initial boring mode state when UI loads
+  mainWindow.webContents.once("did-finish-load", () => {
+    mainWindow.webContents.send("ui:boring-state", boringModeEnabled);
+  });
+
   // Persistent storage (cookies/logins persist inside THIS app profile)
   const persistSession = session.fromPartition("persist:main");
 
@@ -76,6 +93,40 @@ function createWindow() {
   view.webContents.on("did-navigate", sendUrlToUI);
   view.webContents.on("did-navigate-in-page", sendUrlToUI);
   view.webContents.on("did-finish-load", sendUrlToUI);
+
+  // Boring mode injection system
+  const injectBoringMode = () => {
+    if (!boringModeEnabled || !view) return;
+
+    const url = view.webContents.getURL();
+    const hostname = new URL(url).hostname;
+
+    // Inject global boring mode CSS
+    const globalCSS = fs.readFileSync(path.join(__dirname, "boring-modules", "global.css"), "utf8");
+    view.webContents.insertCSS(globalCSS);
+
+    // Determine which site module to use
+    const siteModule = getSiteModule(hostname);
+    if (siteModule) {
+      // Inject site-specific CSS
+      const cssPath = path.join(__dirname, "boring-modules", siteModule, "style.css");
+      if (fs.existsSync(cssPath)) {
+        const siteCSS = fs.readFileSync(cssPath, "utf8");
+        view.webContents.insertCSS(siteCSS);
+      }
+
+      // Inject site-specific JS
+      const jsPath = path.join(__dirname, "boring-modules", siteModule, "inject.js");
+      if (fs.existsSync(jsPath)) {
+        const siteJS = fs.readFileSync(jsPath, "utf8");
+        view.webContents.executeJavaScript(siteJS);
+      }
+    }
+  };
+
+  // Inject on page load and SPA navigation
+  view.webContents.on("did-finish-load", injectBoringMode);
+  view.webContents.on("did-navigate-in-page", injectBoringMode);
 }
 
 app.whenReady().then(createWindow);
@@ -120,4 +171,18 @@ ipcMain.on("article-extracted", (_evt, payload) => {
   }
 
   openReaderWindow(article, url);
+});
+
+// Toggle boring mode
+ipcMain.on("boring:toggle", () => {
+  boringModeEnabled = !boringModeEnabled;
+  mainWindow?.webContents.send("ui:boring-state", boringModeEnabled);
+
+  if (boringModeEnabled) {
+    // Re-inject when turning on
+    view?.webContents.reload();
+  } else {
+    // Reload page to clear injected styles when turning off
+    view?.webContents.reload();
+  }
 });

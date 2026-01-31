@@ -1,5 +1,6 @@
 const urlInput = document.getElementById("url");
 const toastEl = document.getElementById("toast");
+const boringToggleBtn = document.getElementById("boring-toggle");
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -12,6 +13,7 @@ document.getElementById("back").onclick = () => window.api.back();
 document.getElementById("forward").onclick = () => window.api.forward();
 document.getElementById("reload").onclick = () => window.api.reload();
 document.getElementById("reader").onclick = () => window.api.extractReader();
+boringToggleBtn.onclick = () => window.api.toggleBoring();
 
 urlInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") window.api.go(urlInput.value);
@@ -22,3 +24,8 @@ window.api.onUrl((u) => {
 });
 
 window.api.onToast((msg) => showToast(msg));
+
+window.api.onBoringState((enabled) => {
+  boringToggleBtn.textContent = enabled ? "Boring Mode: ON" : "Boring Mode: OFF";
+  boringToggleBtn.style.background = enabled ? "#d4edda" : "#f8d7da";
+});
