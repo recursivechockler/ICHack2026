@@ -21,7 +21,12 @@ urlInput.addEventListener("keydown", (e) => {
 
 // Select all text when clicking on the search bar (like normal browsers)
 urlInput.addEventListener("focus", () => {
-  urlInput.select();
+  // Use setTimeout to ensure selection happens after focus completes
+  setTimeout(() => {
+    urlInput.select();
+    // Also use setSelectionRange as a backup
+    urlInput.setSelectionRange(0, urlInput.value.length);
+  }, 0);
 });
 
 window.api.onUrl((u) => {

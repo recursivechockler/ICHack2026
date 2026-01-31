@@ -333,6 +333,13 @@ body:has(.boring-overlay) > *:not(.boring-overlay) {
 }
 
 /* ========================================
+   FORCE LOWERCASE TEXT
+   ======================================== */
+* {
+  text-transform: lowercase !important;
+}
+
+/* ========================================
    DISABLE ANIMATIONS
    ======================================== */
 *,

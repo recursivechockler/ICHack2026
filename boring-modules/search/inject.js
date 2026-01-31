@@ -11,15 +11,14 @@
   // Extract search results from DuckDuckGo
   function extractSearchResults() {
     const results = [];
+    const seenUrls = new Set(); // Track URLs to prevent duplicates
 
-    // DuckDuckGo result selectors
+    // DuckDuckGo result selectors - use most specific first
     const resultElements = document.querySelectorAll(
-      'article[data-testid="result"], li[data-layout="organic"], .result, .web-result'
+      'article[data-testid="result"], li[data-layout="organic"], .result__body'
     );
 
     resultElements.forEach((result, index) => {
-      if (index >= 20) return; // Limit to 20 results
-
       try {
         // Get title and link
         const titleElement = result.querySelector('h2 a, h3 a, .result__a, a[data-testid="result-title-a"]');
@@ -28,6 +27,13 @@
         const title = titleElement.textContent.trim();
         const url = titleElement.getAttribute('href');
         if (!title || !url) return;
+
+        // Skip if we've already seen this URL (deduplication)
+        if (seenUrls.has(url)) return;
+        seenUrls.add(url);
+
+        // Limit to 20 unique results
+        if (results.length >= 20) return;
 
         // Get snippet/description
         let snippet = '';
