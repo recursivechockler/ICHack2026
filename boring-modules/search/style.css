@@ -1,0 +1,54 @@
+/**
+ * Search Results Boring Mode CSS
+ */
+
+/* Search results container */
+.boring-search-results {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.5rem !important;
+  margin-top: 2rem !important;
+}
+
+/* Individual search result */
+.boring-search-result {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 1.25rem !important;
+  cursor: pointer !important;
+  transition: border-color 150ms !important;
+  text-align: left !important;
+  display: block !important;
+  text-decoration: none !important;
+}
+
+.boring-search-result:hover {
+  border-color: var(--hover-border) !important;
+}
+
+/* Domain/URL */
+.boring-search-result-domain {
+  font-size: 0.8rem !important;
+  color: var(--muted-fg) !important;
+  margin-bottom: 0.5rem !important;
+  text-transform: lowercase !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Title */
+.boring-search-result-title {
+  font-size: 1.25rem !important;
+  font-weight: 500 !important;
+  margin: 0 0 0.5rem 0 !important;
+  color: var(--fg) !important;
+  line-height: 1.3 !important;
+}
+
+/* Snippet/Description */
+.boring-search-result-snippet {
+  font-size: 0.95rem !important;
+  color: var(--muted-fg) !important;
+  line-height: 1.6 !important;
+  margin: 0 !important;
+}

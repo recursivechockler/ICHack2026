@@ -242,9 +242,9 @@
 
   // Run after page loads
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1000));
+    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 500));
   } else {
-    setTimeout(init, 1000);
+    setTimeout(init, 500);
   }
 
   // Handle SPA navigation
@@ -253,7 +253,7 @@
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       console.log('[Boring Mode] URL changed, reinitializing...');
-      setTimeout(init, 1000);
+      setTimeout(init, 500);
     }
   });
 

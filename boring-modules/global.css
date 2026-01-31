@@ -356,3 +356,65 @@ body:has(.boring-overlay) > *:not(.boring-overlay) {
 * {
   box-shadow: none !important;
 }
+
+/* ========================================
+   HIDE ALL ICONS AND FAVICONS
+   ======================================== */
+/* Hide favicons and site icons everywhere */
+img[src*="favicon"],
+img[src*="icon"],
+img[class*="favicon"],
+img[class*="icon"],
+link[rel="icon"],
+link[rel="shortcut icon"],
+[class*="favicon"],
+[class*="site-icon"],
+[data-testid*="icon"],
+svg[class*="icon"]:not(.boring-overlay svg),
+.icon,
+.favicon {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* DuckDuckGo specific - hide result icons */
+.result__icon,
+.result__icon__img,
+.module__icon,
+img.result__icon__img {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* DuckDuckGo - hide entire header section */
+.header,
+.header__content,
+.header-wrap,
+.search-wrap,
+.search-wrap--home,
+.logo_homepage,
+.logo_homepage__tt,
+.tag-home,
+.js-header-wrap,
+[class*="Header"],
+[class*="SearchForm"],
+[data-testid="header"],
+.HeaderWrapper,
+.HeaderContent {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Move search results to top */
+.results,
+.react-results,
+[data-area="mainline"] {
+  margin-top: 0 !important;
+  padding-top: 1rem !important;
+}
+
+/* Hide background images that might be icons */
+[style*="background-image"]:not(.boring-overlay):not(.boring-overlay *) {
+  background-image: none !important;
+}
