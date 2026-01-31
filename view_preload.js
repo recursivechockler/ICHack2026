@@ -1,4 +1,14 @@
-const { ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
+
+// Expose API for boring-mode templates (template.html uses this)
+contextBridge.exposeInMainWorld("boringAPI", {
+  onData:   (fn) => ipcRenderer.on("boring:data", (_e, payload) => fn(payload)),
+  checkout: (items) => ipcRenderer.send("boring:checkout", items),
+  navigate: (url) => {
+    if (url === 'back') ipcRenderer.send("nav:back");
+    else ipcRenderer.send("nav:go", url);
+  }
+});
 const { Readability } = require("@mozilla/readability");
 
 function extractArticle() {

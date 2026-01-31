@@ -1,38 +1,18 @@
 /**
- * Amazon Focused Mode
- *
- * Strips product images, recommendations, sidebars, and cross-sells.
- * Renders a text-only overlay using the global dark theme.
- * Works on search results, category pages, and the homepage.
- * Product detail pages show only the essentials: name, price, rating, key bullets.
- * Purchasing requires opening the real Amazon page in a new tab (added friction).
+ * Amazon extraction — executed in the hidden BrowserView via executeJavaScript.
+ * Returns structured data; does NO rendering.  The result is passed to template.html.
  */
-(function () {
-  'use strict';
-
-  console.log('[Boring Mode] Amazon module loaded');
-
-  // Currency symbol based on TLD
-  const currency = window.location.hostname.includes('amazon.co.uk') ? '£' : '$';
+(async function () {
+  var currency = window.location.hostname.includes('amazon.co.uk') ? '£' : '$';
 
   // --- Helpers ---
 
-  function escapeHtml(text) {
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  // Strip Amazon tracking/referral params, keep only /dp/ASIN
   function cleanProductUrl(href) {
-    var match = href.match(/(\/dp\/[A-Z0-9]+)/);
-    if (match) {
-      return window.location.origin + match[1];
-    }
+    var match = href.match(/\/dp\/([A-Z0-9]+)/) || href.match(/\/gp\/product\/([A-Z0-9]+)/);
+    if (match) return window.location.origin + '/dp/' + match[1];
     return href;
   }
 
-  // Extract price from a container element
   function readPrice(container) {
     var wholeEl = container.querySelector('.a-price .a-price-whole');
     var fracEl  = container.querySelector('.a-price .a-price-fraction');
@@ -42,7 +22,6 @@
     return price;
   }
 
-  // Extract numeric rating from nearest .a-icon-alt element
   function readRating(container) {
     var el = container.querySelector('.a-icon-alt');
     if (!el) return '';
@@ -50,8 +29,6 @@
     return m ? m[1] + ' / 5' : '';
   }
 
-  // Extract a short description snippet from a product card.
-  // Looks for secondary-coloured text spans that aren't the title, price, or rating.
   function readDescription(container, titleText) {
     var spans = container.querySelectorAll('span[class*="a-size-base"]');
     for (var i = 0; i < spans.length; i++) {
@@ -65,8 +42,20 @@
     return '';
   }
 
-  // Returns true if the product card is a sponsored/ad placement.
-  // Amazon marks these with a "Sponsored" label span inside the card.
+  function readImage(container) {
+    var img = container.querySelector(
+      'img[class*="s-product-image"], ' +
+      '[data-component-type="s-product-image"] img, ' +
+      'img[src*="images/I/"]'
+    );
+    if (img && img.src) return img.src;
+    var imgs = container.querySelectorAll('img[src]');
+    for (var i = 0; i < imgs.length; i++) {
+      if (imgs[i].src.length > 50 && !imgs[i].src.includes('1x1')) return imgs[i].src;
+    }
+    return '';
+  }
+
   function isSponsored(el) {
     var spans = el.querySelectorAll('span');
     for (var i = 0; i < spans.length; i++) {
@@ -76,141 +65,82 @@
     return !!el.querySelector('[class*="sponsored"], [class*="Sponsored"]');
   }
 
-  // --- Page-type detection ---
-
-  function isProductPage() {
-    return /\/dp\/[A-Z0-9]+/.test(window.location.pathname);
-  }
-
-  function isHomepage() {
-    var p = window.location.pathname;
-    return p === '/' || p === '';
-  }
-
-  // --- Listing / search pages ---
+  // --- Listing extraction ---
 
   function extractProducts() {
     var products = [];
-    var seen = {}; // deduplicate by ASIN
+    var seen = {};
 
-    // Primary: search result containers (search / category pages)
-    var candidates = document.querySelectorAll(
-      '[data-component-type="s-search-result"], ' +
-      '[class*="s-search-result"]'
-    );
+    var container = document.querySelector('#search, [role="main"], #main') || document;
 
-    // Fallback: any element with data-asin (homepage carousels, deals, etc.)
-    if (candidates.length === 0) {
-      candidates = document.querySelectorAll('[data-asin]');
+    function getTitleFromCard(card, linkEl) {
+      var titleEl = card.querySelector(
+        'h2 a span, span.a-size-medium.a-color-base.a-text-normal, ' +
+        'span.a-size-base-plus.a-color-base.a-text-normal, span.a-size-base-plus, ' +
+        'span.a-size-medium, span.a-text-normal'
+      );
+      var title = titleEl ? titleEl.textContent.trim() : '';
+      if (!title && linkEl) title = linkEl.textContent.trim();
+      if (!title) {
+        var img = card.querySelector('img[alt]');
+        if (img && img.getAttribute('alt')) title = img.getAttribute('alt').trim();
+      }
+      return title.replace(/\s+/g, ' ').trim();
     }
 
-    candidates.forEach(function (el) {
-      if (isSponsored(el)) return;
+    function getLinkFromCard(card) {
+      return card.querySelector('a[href*="/dp/"], a[href*="/gp/product/"]');
+    }
 
-      var linkEl = el.querySelector('a[href*="/dp/"]');
-      if (!linkEl) return;
+    function addFromCard(card, linkEl) {
+      if (!card) return;
+      if (isSponsored(card)) return;
 
-      // Deduplicate by ASIN
-      var href = linkEl.getAttribute('href');
-      var asinMatch = href.match(/\/dp\/([A-Z0-9]+)/);
-      if (!asinMatch) return;
-      if (seen[asinMatch[1]]) return;
-      seen[asinMatch[1]] = true;
+      var asin = card.getAttribute('data-asin');
+      var href = linkEl ? linkEl.getAttribute('href') : '';
+      if (!asin && href) {
+        var asinMatch = href.match(/\/dp\/([A-Z0-9]+)/) || href.match(/\/gp\/product\/([A-Z0-9]+)/);
+        if (asinMatch) asin = asinMatch[1];
+      }
 
-      var titleEl = el.querySelector('h2 span, [class*="a-size-medium"] span, a[href*="/dp/"] span');
-      if (!titleEl || titleEl.textContent.trim().length < 3) return;
+      if (!asin || seen[asin]) return;
+      seen[asin] = true;
 
-      var title = titleEl.textContent.trim();
+      var title = getTitleFromCard(card, linkEl);
+      if (title.length < 3) return;
+
+      var url = href ? cleanProductUrl(href) : (window.location.origin + '/dp/' + asin);
 
       products.push({
+        asin:        asin,
         title:       title,
-        url:         cleanProductUrl(href),
-        price:       readPrice(el),
-        rating:      readRating(el),
-        description: readDescription(el, title)
+        url:         url,
+        price:       readPrice(card),
+        rating:      readRating(card),
+        description: readDescription(card, title),
+        image:       readImage(card)
       });
+    }
+
+    var titleLinks = container.querySelectorAll(
+      'h2 a[href*="/dp/"], h2 a[href*="/gp/product/"]'
+    );
+
+    titleLinks.forEach(function (linkEl) {
+      var card = linkEl.closest('[data-asin], [data-component-type="s-search-result"]');
+      addFromCard(card, linkEl);
+    });
+
+    var candidates = container.querySelectorAll('[data-component-type="s-search-result"], [data-asin]');
+    candidates.forEach(function (card) {
+      var linkEl = getLinkFromCard(card);
+      addFromCard(card, linkEl);
     });
 
     return products;
   }
 
-  function renderProductList(products) {
-    var overlay = document.createElement('div');
-    overlay.className = 'boring-overlay';
-
-    var cardsHtml = products.map(function (p) {
-      var meta = escapeHtml(p.price);
-      if (p.rating) meta += ' &middot; ' + escapeHtml(p.rating);
-
-      var descHtml = '';
-      if (p.description) {
-        descHtml = '<div class="boring-card-description">' + escapeHtml(p.description) + '</div>';
-      }
-
-      return '<a href="' + escapeHtml(p.url) + '" class="boring-card">' +
-        '<h3 class="boring-card-title">' + escapeHtml(p.title) + '</h3>' +
-        '<div class="boring-card-meta">' + meta + '</div>' +
-        descHtml +
-        '</a>';
-    }).join('');
-
-    var emptyHtml = '';
-    if (products.length === 0) {
-      emptyHtml = '<p class="boring-empty-msg">No products found — try searching first, or the page may still be loading.</p>';
-    }
-
-    overlay.innerHTML =
-      '<div class="boring-container">' +
-        '<div class="boring-header">' +
-          '<h1 class="boring-title">Amazon</h1>' +
-        '</div>' +
-        '<div class="boring-grid">' + cardsHtml + '</div>' +
-        emptyHtml +
-      '</div>';
-
-    document.body.appendChild(overlay);
-    console.log('[Boring Mode] Amazon listing rendered (' + products.length + ' products)');
-  }
-
-  // --- Homepage ---
-
-  function renderHomepage() {
-    var overlay = document.createElement('div');
-    overlay.className = 'boring-overlay';
-
-    overlay.innerHTML =
-      '<div class="boring-container">' +
-        '<div class="boring-header">' +
-          '<h1 class="boring-title">Amazon</h1>' +
-        '</div>' +
-        '<div class="boring-search-wrapper">' +
-          '<input type="text" class="boring-search-input" id="amazon-search" placeholder="Search Amazon" />' +
-          '<button class="boring-search-btn" id="amazon-search-btn">Search</button>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-
-    var input = overlay.querySelector('#amazon-search');
-    var btn   = overlay.querySelector('#amazon-search-btn');
-
-    function doSearch() {
-      var q = input.value.trim();
-      if (q) {
-        window.location.href = window.location.origin + '/s?k=' + encodeURIComponent(q);
-      }
-    }
-
-    btn.addEventListener('click', doSearch);
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') doSearch();
-    });
-    input.focus();
-
-    console.log('[Boring Mode] Amazon homepage rendered');
-  }
-
-  // --- Product detail pages ---
+  // --- Product detail extraction ---
 
   function extractProductDetails() {
     var product = {
@@ -218,40 +148,29 @@
       price:   '',
       rating:  '',
       details: [],
-      url:     window.location.href
+      url:     window.location.href,
+      image:   ''
     };
 
-    // Title
     var titleEl = document.querySelector('#productTitle span, #productTitle');
     if (titleEl) product.name = titleEl.textContent.trim();
 
-    // Price — try the main price widget
     var priceContainer = document.querySelector('[data-feature-name="price"], #price_display_Amazon_Feature_Price_Desktop');
-    if (priceContainer) {
-      product.price = readPrice(priceContainer);
-    }
-    // Fallback: first .a-price on the page
-    if (!product.price) {
-      product.price = readPrice(document);
-    }
+    if (priceContainer) product.price = readPrice(priceContainer);
+    if (!product.price) product.price = readPrice(document);
 
-    // Rating
     var ratingEl = document.querySelector('[data-hook="review-star-rating"] .a-icon-alt, #ratingValue');
     if (ratingEl) {
       var m = ratingEl.textContent.match(/([\d.]+)/);
       if (m) product.rating = m[1] + ' / 5';
     }
 
-    // Feature bullets — the most useful dense info on the page, capped at 5
     document.querySelectorAll('#feature-bullets li, [data-feature-name="feature-bullets"] li').forEach(function (li) {
       if (product.details.length >= 5) return;
       var text = li.textContent.trim();
-      if (text.length > 5 && !/click here/i.test(text)) {
-        product.details.push(text);
-      }
+      if (text.length > 5 && !/click here/i.test(text)) product.details.push(text);
     });
 
-    // Fallback: product description block
     if (product.details.length === 0) {
       var descEl = document.querySelector('#productDescription span, [data-feature-name="product-description"] span');
       if (descEl) {
@@ -260,78 +179,157 @@
       }
     }
 
-    // Clean tracking params from URL
     var dpMatch = product.url.match(/(https?:\/\/[^/]+\/dp\/[A-Z0-9]+)/);
     if (dpMatch) product.url = dpMatch[1];
+
+    // Hero image
+    var heroImg = document.querySelector('#landingImage, .a-img-container img[src*="images/I/"]');
+    if (heroImg && heroImg.src) product.image = heroImg.src;
 
     return product;
   }
 
-  function renderProductDetail(product) {
-    var overlay = document.createElement('div');
-    overlay.className = 'boring-overlay';
+  // --- Cart extraction ---
 
-    var detailsHtml = '';
-    if (product.details.length > 0) {
-      detailsHtml =
-        '<div class="boring-product-details">' +
-          product.details.map(function (d) {
-            return '<p>' + escapeHtml(d) + '</p>';
-          }).join('') +
-        '</div>';
-    }
+  function extractCartItems() {
+    var items = [];
+    var seen = {};
+    var cartContainers = document.querySelectorAll(
+      '#sc-active-cart .sc-list-item, .sc-list-item, .sc-cart-item'
+    );
 
-    var ratingHtml = '';
-    if (product.rating) {
-      ratingHtml = '<div class="boring-product-rating">' + escapeHtml(product.rating) + '</div>';
-    }
+    cartContainers.forEach(function (el) {
+      var asin = el.getAttribute('data-asin') || '';
 
-    overlay.innerHTML =
-      '<div class="boring-container">' +
-        '<button class="boring-back" onclick="history.back()">&#8592; Back</button>' +
-        '<div class="boring-product-detail">' +
-          '<h1 class="boring-product-name">' + escapeHtml(product.name) + '</h1>' +
-          '<div class="boring-product-price">' + escapeHtml(product.price) + '</div>' +
-          ratingHtml +
-          detailsHtml +
-          '<a href="' + escapeHtml(product.url) + '" target="_blank" class="boring-button boring-button-primary">' +
-            'Open on Amazon to purchase' +
-          '</a>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-    console.log('[Boring Mode] Amazon product detail rendered');
-  }
-
-  // --- Init ---
-
-  function init() {
-    var existing = document.querySelector('.boring-overlay');
-    if (existing) existing.remove();
-
-    if (isProductPage()) {
-      var product = extractProductDetails();
-      if (product.name) {
-        renderProductDetail(product);
-      } else {
-        console.warn('[Boring Mode] Could not extract product name');
+      var linkEl = el.querySelector('a[href*="/dp/"], a[href*="/gp/product/"]');
+      var href = linkEl ? linkEl.getAttribute('href') : '';
+      if (!asin && href) {
+        var asinMatch = href.match(/\/dp\/([A-Z0-9]+)/) || href.match(/\/gp\/product\/([A-Z0-9]+)/);
+        if (asinMatch) asin = asinMatch[1];
       }
-    } else if (isHomepage()) {
-      renderHomepage();
-    } else {
-      var products = extractProducts();
-      renderProductList(products);
+
+      if (!asin || seen[asin]) return;
+      seen[asin] = true;
+
+      var titleEl = el.querySelector(
+        '.sc-product-title, span.sc-product-title, .a-truncate-full, .a-truncate-cut, .a-size-medium'
+      );
+      var title = titleEl ? titleEl.textContent.trim() : '';
+      if (!title && linkEl) title = linkEl.textContent.trim();
+      title = title.replace(/\s+/g, ' ').trim();
+
+      var priceEl = el.querySelector('.sc-price, .sc-product-price, .a-price .a-offscreen');
+      var price = priceEl ? priceEl.textContent.trim() : '';
+
+      var qty = '';
+      var qtySelect = el.querySelector('select[name="quantity"], select[name="quantityBox"]');
+      if (qtySelect) qty = qtySelect.value || '';
+      if (!qty) {
+        var qtyText = el.querySelector('.sc-quantity-text, .a-dropdown-prompt');
+        if (qtyText) qty = qtyText.textContent.trim();
+      }
+
+      var imgEl = el.querySelector('img.sc-product-image, img[alt][src]');
+      var image = imgEl && imgEl.src ? imgEl.src : '';
+
+      items.push({
+        asin: asin,
+        title: title,
+        price: price,
+        quantity: qty,
+        url: href ? cleanProductUrl(href) : (window.location.origin + '/dp/' + asin),
+        image: image
+      });
+    });
+
+    return items;
+  }
+
+  // --- Wait helpers ---
+  // Amazon renders search results and product pages via JS *after* DOMContentLoaded/load.
+  // Poll until the expected elements appear or a timeout is hit.
+
+  function waitForSelector(selector, timeout) {
+    return new Promise(function (resolve) {
+      var deadline = Date.now() + timeout;
+      (function tick() {
+        if (document.querySelectorAll(selector).length > 0 || Date.now() >= deadline) {
+          resolve();
+        } else {
+          setTimeout(tick, 250);
+        }
+      })();
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  // Scroll the page to trigger Amazon's lazy-load / infinite-scroll for additional results,
+  // then wait briefly so the new cards render into the DOM.
+  async function scrollAndCollect() {
+    var lastHeight = 0;
+    var maxScrolls = 8; // Maximum number of scroll attempts
+    var scrollCount = 0;
+    var stableCount = 0; // Track how many times height hasn't changed
+    
+    while (scrollCount < maxScrolls && stableCount < 2) {
+      var currentHeight = document.body.scrollHeight;
+      
+      // Scroll to bottom
+      window.scrollTo(0, currentHeight);
+      await sleep(600);
+      
+      // Quick scroll up and down to trigger lazy load
+      window.scrollTo(0, currentHeight - 300);
+      await sleep(200);
+      window.scrollTo(0, document.body.scrollHeight);
+      await sleep(800);
+      
+      scrollCount++;
+      
+      // Check if page height increased (new content loaded)
+      if (document.body.scrollHeight === lastHeight) {
+        stableCount++;
+      } else {
+        stableCount = 0;
+        lastHeight = document.body.scrollHeight;
+      }
     }
+    
+    console.log('[Boring Mode] Scrolled ' + scrollCount + ' times, loaded ' + 
+          document.querySelectorAll('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"]').length + ' potential items');
   }
 
-  // Amazon pages are mostly server-rendered, but give a short delay for any
-  // late-hydrating elements before scraping.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1500); });
+  // --- Detect page type and return data ---
+
+  var isProduct = /\/dp\/[A-Z0-9]+/.test(window.location.pathname);
+  var isHome   = window.location.pathname === '/' || window.location.pathname === '';
+  var isCart   = /\/cart/.test(window.location.pathname) || /\/gp\/cart/.test(window.location.pathname);
+
+  if (isProduct) {
+    // Wait for title element — signals the product page has rendered
+    await waitForSelector('#productTitle', 5000);
+    return { type: 'product', origin: window.location.origin, product: extractProductDetails() };
+  } else if (isHome) {
+    return { type: 'homepage', origin: window.location.origin };
+  } else if (isCart) {
+    await waitForSelector('.sc-list-item, #sc-active-cart, .sc-cart-item', 7000);
+    return { type: 'cart', origin: window.location.origin, items: extractCartItems() };
   } else {
-    setTimeout(init, 1500);
-  }
+    // Wait for the first batch of search-result cards to appear
+    await waitForSelector('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"], span.a-size-medium.a-color-base.a-text-normal', 6000);
+    // Scroll down to pull in lazy-loaded results
+    await scrollAndCollect();
+    // Scroll back to top so the template starts at the top
+    window.scrollTo(0, 0);
 
-  console.log('[Boring Mode] Amazon module initialized');
+    return {
+      type:     'listing',
+      origin:   window.location.origin,
+      products: extractProducts(),
+      query:    new URLSearchParams(window.location.search).get('k') || ''
+    };
+  }
 })();

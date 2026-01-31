@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld("api", {
 
   onUrl: (fn) => ipcRenderer.on("ui:url", (_e, url) => fn(url)),
   onToast: (fn) => ipcRenderer.on("ui:toast", (_e, msg) => fn(msg)),
-  onBoringState: (fn) => ipcRenderer.on("ui:boring-state", (_e, enabled) => fn(enabled))
+  onBoringState: (fn) => ipcRenderer.on("ui:boring-state", (_e, enabled) => fn(enabled)),
+  onLoading: (fn) => ipcRenderer.on("ui:loading", (_e, isLoading) => fn(isLoading))
 });

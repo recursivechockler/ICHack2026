@@ -1,6 +1,7 @@
 const urlInput = document.getElementById("url");
 const toastEl = document.getElementById("toast");
 const boringToggleBtn = document.getElementById("boring-toggle");
+const loadingEl = document.getElementById("loading");
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -28,4 +29,9 @@ window.api.onToast((msg) => showToast(msg));
 window.api.onBoringState((enabled) => {
   boringToggleBtn.textContent = enabled ? "Boring Mode: ON" : "Boring Mode: OFF";
   boringToggleBtn.style.background = enabled ? "#d4edda" : "#f8d7da";
+});
+
+window.api.onLoading((isLoading) => {
+  if (!loadingEl) return;
+  loadingEl.classList.toggle("show", !!isLoading);
 });

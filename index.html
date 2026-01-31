@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>Anti-Dopamine Browser</title>
     <style>
-      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: #111; }
       .bar {
         height: 64px;
         display: flex;
@@ -51,6 +51,22 @@
         transition: opacity 120ms ease;
       }
       .toast.show { opacity: 0.92; }
+      .loading-overlay {
+        position: fixed;
+        top: 64px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #111;
+        color: #e8e8e8;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        letter-spacing: 0.02em;
+        z-index: 9999;
+      }
+      .loading-overlay.show { display: flex; }
     </style>
   </head>
   <body>
@@ -65,6 +81,7 @@
     </div>
 
     <div id="toast" class="toast"></div>
+    <div id="loading" class="loading-overlay">Loading results…</div>
 
     <script src="ui.js"></script>
   </body>
