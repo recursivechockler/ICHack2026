@@ -19,6 +19,11 @@ urlInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") window.api.go(urlInput.value);
 });
 
+// Select all text when clicking on the search bar (like normal browsers)
+urlInput.addEventListener("focus", () => {
+  urlInput.select();
+});
+
 window.api.onUrl((u) => {
   if (typeof u === "string" && u.length > 0) urlInput.value = u;
 });

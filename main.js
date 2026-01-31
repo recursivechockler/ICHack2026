@@ -8,11 +8,22 @@ let boringModeEnabled = true; // Boring mode on by default
 
 // Site detection - maps hostnames to module names
 function getSiteModule(hostname) {
+  // Search engines - highest priority
+  if (hostname.includes("duckduckgo.com")) return "search";
+  if (hostname.includes("google.com")) return "search";
+  if (hostname.includes("bing.com")) return "search";
+
+  // Video platforms
   if (hostname.includes("youtube.com")) return "youtube";
+
+  // News sites
   if (hostname.includes("bbc.com") || hostname.includes("bbc.co.uk")) return "news";
   if (hostname.includes("theguardian.com")) return "news";
+
+  // Shopping
   if (hostname.includes("asos.com")) return "shopping";
   if (hostname.includes("zara.com")) return "shopping";
+
   return null;
 }
 
@@ -94,6 +105,18 @@ function createWindow() {
   view.webContents.on("did-navigate-in-page", sendUrlToUI);
   view.webContents.on("did-finish-load", sendUrlToUI);
 
+  // Handle new window requests - keep navigation in the same view
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    view.webContents.loadURL(url);
+    return { action: 'deny' };
+  });
+
+  // Handle navigation requests (for better link handling)
+  view.webContents.on('will-navigate', (_event, url) => {
+    // Allow all navigation by default
+    console.log('Navigating to:', url);
+  });
+
   // Boring mode injection system
   const injectBoringMode = () => {
     if (!boringModeEnabled || !view) return;
@@ -141,13 +164,44 @@ app.on("activate", () => {
 
 // ---- IPC from UI (address bar/buttons) ----
 
-ipcMain.on("nav:go", (_evt, url) => {
+// Helper function to determine if input is a URL or search query
+function isUrl(input) {
+  const trimmed = input.trim();
+
+  // Already has protocol
+  if (/^https?:\/\//i.test(trimmed)) return true;
+
+  // Localhost or IP address
+  if (/^localhost(:\d+)?$/i.test(trimmed)) return true;
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(trimmed)) return true;
+
+  // Has domain extension (e.g., .com, .org, .co.uk)
+  // Also checks for paths/params which suggest it's a URL
+  if (/\.[a-z]{2,}(\/|$|:|\?|#)/i.test(trimmed)) return true;
+
+  // Simple domain without path (e.g., "example.com" or "bbc.co.uk")
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(trimmed)) return true;
+
+  return false;
+}
+
+ipcMain.on("nav:go", (_evt, input) => {
   if (!view) return;
   try {
-    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    view.webContents.loadURL(normalized);
+    let targetUrl;
+
+    if (isUrl(input)) {
+      // It's a URL - normalize it
+      targetUrl = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+    } else {
+      // It's a search query - use DuckDuckGo (privacy-focused search engine)
+      const query = encodeURIComponent(input.trim());
+      targetUrl = `https://duckduckgo.com/?q=${query}`;
+    }
+
+    view.webContents.loadURL(targetUrl);
   } catch (e) {
-    console.error("Bad URL:", e);
+    console.error("Navigation error:", e);
   }
 });
 
