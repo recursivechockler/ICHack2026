@@ -5,6 +5,7 @@ const fs = require("fs");
 let mainWindow = null;
 let view = null;
 let boringModeEnabled = true; // Boring mode on by default
+let lastRealUrl = null;
 
 // Scraping state machine for template-based sites
 //   null                          – not scraping
@@ -134,6 +135,9 @@ function createWindow() {
   // Keep URL bar synced on navigation
   const sendUrlToUI = () => {
     const url = view.webContents.getURL();
+    if (/^https?:\/\//i.test(url)) {
+      lastRealUrl = url;
+    }
     mainWindow.webContents.send("ui:url", url);
   };
 
@@ -203,6 +207,9 @@ function createWindow() {
     // Safety: if we aren't scraping anymore, ensure the page isn't left hidden
     if (!scrapingState && hidePage) {
       hidePage = false;
+    }
+    if (!scrapingState) {
+      mainWindow?.webContents.send("ui:loading", false);
     }
 
     // ── Phase 1: real site just finished loading in the hidden view ──
@@ -438,6 +445,7 @@ ipcMain.on("boring:checkout", async (_evt, items) => {
 ipcMain.on("boring:toggle", () => {
   boringModeEnabled = !boringModeEnabled;
   mainWindow?.webContents.send("ui:boring-state", boringModeEnabled);
+  mainWindow?.webContents.send("ui:loading", false);
 
   // Reset scraping state so the reload picks up the new mode cleanly
   scrapingState = null;
@@ -450,15 +458,21 @@ ipcMain.on("boring:toggle", () => {
       const hostname = new URL(url).hostname;
       const siteModule = getSiteModule(hostname);
       if (siteModule && hasTemplate(siteModule)) {
-        const [w, h] = mainWindow.getContentSize();
-        view.setBounds({ x: 0, y: 64, width: w, height: h - 64 });
+        view.setBounds({ x: 0, y: 64, width: 0, height: 0 });
         hidePage = true;
         scrapingState = { phase: "scraping", module: siteModule };
       }
     } catch (e) { /* ignore */ }
   } else if (mainWindow && view) {
+    hidePage = false;
     const [w, h] = mainWindow.getContentSize();
     view.setBounds({ x: 0, y: 64, width: w, height: h - 64 });
+    if (lastRealUrl) {
+      view.webContents.loadURL(lastRealUrl);
+    } else {
+      view?.webContents.reload();
+    }
+    return;
   }
 
   view?.webContents.reload();
