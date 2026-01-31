@@ -50,6 +50,21 @@
     return d.innerHTML;
   }
 
+  function normalizeTitle(title) {
+    if (!title) return '';
+    var trimmed = String(title).split('|')[0].trim();
+    return trimmed.toLowerCase();
+  }
+
+  function formatRating(rating, reviews) {
+    if (!rating) return '';
+    var m = rating.match(/([\d.]+)/);
+    var value = m ? m[1] : rating;
+    var text = value + ' \u2605';
+    if (reviews) text += ' (' + reviews + ')';
+    return text;
+  }
+
   function getAsinFromUrl(url) {
     if (!url) return '';
     var m = url.match(/\/dp\/([A-Z0-9]+)/) || url.match(/\/gp\/product\/([A-Z0-9]+)/);
@@ -77,7 +92,8 @@
 
     content.innerHTML = products.map(function (p) {
       var meta = escapeHtml(p.price || '');
-      if (p.rating) meta += ' &middot; ' + escapeHtml(p.rating);
+      var ratingText = formatRating(p.rating || '', p.reviews || '');
+      if (ratingText) meta += ' &middot; ' + escapeHtml(ratingText);
 
       var imgHtml = p.image
         ? '<img src="' + escapeHtml(p.image) + '" class="card-image" alt="">'
@@ -89,7 +105,7 @@
       return '<div class="card" data-asin="' + escapeHtml(p.asin) + '">' +
         imgHtml +
         '<div class="card-text">' +
-          '<button class="card-title" data-url="' + escapeHtml(p.url) + '">' + escapeHtml(p.title) + '</button>' +
+          '<button class="card-title" data-url="' + escapeHtml(p.url) + '">' + escapeHtml(normalizeTitle(p.title)) + '</button>' +
           '<div class="card-meta">' + meta + '</div>' +
           descHtml +
           '<button class="add-btn' + (isInCart(p.asin) ? ' added' : '') + '">' +
@@ -148,7 +164,7 @@
       '<button class="back-btn" id="back-btn">\u2190 Back</button>' +
       '<div class="product-detail">' +
         imgHtml +
-        '<h2 class="product-name">' + escapeHtml(p.name) + '</h2>' +
+        '<h2 class="product-name">' + escapeHtml(normalizeTitle(p.name)) + '</h2>' +
         '<div class="product-price">' + escapeHtml(p.price) + '</div>' +
         ratingHtml +
         detailsHtml +
@@ -217,7 +233,7 @@
       return '<div class="card" data-asin="' + escapeHtml(item.asin) + '">' +
         imgHtml +
         '<div class="card-text">' +
-          '<button class="card-title" data-url="' + escapeHtml(item.url) + '">' + escapeHtml(item.title || 'Item') + '</button>' +
+          '<button class="card-title" data-url="' + escapeHtml(item.url) + '">' + escapeHtml(normalizeTitle(item.title || 'Item')) + '</button>' +
           '<div class="card-meta">' + meta + '</div>' +
           '<button class="add-btn remove-btn" data-asin="' + escapeHtml(item.asin) + '">Remove</button>' +
         '</div>' +

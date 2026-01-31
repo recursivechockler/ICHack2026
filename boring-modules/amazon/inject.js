@@ -17,8 +17,13 @@
     var wholeEl = container.querySelector('.a-price .a-price-whole');
     var fracEl  = container.querySelector('.a-price .a-price-fraction');
     if (!wholeEl) return '';
-    var price = currency + wholeEl.textContent.trim();
-    if (fracEl) price += '.' + fracEl.textContent.trim();
+    var whole = wholeEl.textContent.trim().replace(/\s+/g, '');
+    whole = whole.replace(/[.,]$/, '');
+    var price = currency + whole;
+    if (fracEl) {
+      var frac = fracEl.textContent.trim().replace(/\s+/g, '');
+      if (frac) price += '.' + frac;
+    }
     return price;
   }
 
@@ -27,6 +32,18 @@
     if (!el) return '';
     var m = el.textContent.match(/([\d.]+)/);
     return m ? m[1] + ' / 5' : '';
+  }
+
+  function readReviewCount(container) {
+    var el = container.querySelector(
+      'a[href*="customerReviews"] .a-size-base, ' +
+      'a[href*="customerReviews"] span, ' +
+      '[data-component-type="s-customer-reviews"] span.a-size-base, ' +
+      'span.a-size-base.s-underline-text'
+    );
+    if (!el) return '';
+    var text = el.textContent.replace(/[\s,]/g, '').trim();
+    return /\d+/.test(text) ? text : '';
   }
 
   function readDescription(container, titleText) {
@@ -57,6 +74,11 @@
   }
 
   function isSponsored(el) {
+    if (!el) return false;
+    if (el.getAttribute('data-component-type') === 's-sponsored-result') return true;
+    if (el.querySelector('[data-component-type="sp-sponsored-result"]')) return true;
+    if (el.querySelector('[aria-label*="Sponsored"], [aria-label*="sponsored"]')) return true;
+    if (el.querySelector('span.s-label-popover, span.s-sponsored-label-text')) return true;
     var spans = el.querySelectorAll('span');
     for (var i = 0; i < spans.length; i++) {
       var t = spans[i].textContent.trim();
@@ -110,13 +132,20 @@
       if (title.length < 3) return;
 
       var url = href ? cleanProductUrl(href) : (window.location.origin + '/dp/' + asin);
+      var price = readPrice(card);
+      var rating = readRating(card);
+      var reviews = readReviewCount(card);
+
+      // Skip cards that are likely sponsored/empty (no price and no rating/reviews)
+      if (!price && !rating && !reviews) return;
 
       products.push({
         asin:        asin,
         title:       title,
         url:         url,
-        price:       readPrice(card),
-        rating:      readRating(card),
+        price:       price,
+        rating:      rating,
+        reviews:     reviews,
         description: readDescription(card, title),
         image:       readImage(card)
       });
@@ -270,26 +299,26 @@
   // then wait briefly so the new cards render into the DOM.
   async function scrollAndCollect() {
     var lastHeight = 0;
-    var maxScrolls = 8; // Maximum number of scroll attempts
+    var maxScrolls = 4; // Faster: fewer scroll attempts
     var scrollCount = 0;
     var stableCount = 0; // Track how many times height hasn't changed
-    
+
     while (scrollCount < maxScrolls && stableCount < 2) {
       var currentHeight = document.body.scrollHeight;
-      
-      // Scroll to bottom
+
+      // Early exit if we already have plenty of items
+      var currentCount = extractProducts().length;
+      if (currentCount >= 36) break;
+
       window.scrollTo(0, currentHeight);
-      await sleep(600);
-      
-      // Quick scroll up and down to trigger lazy load
-      window.scrollTo(0, currentHeight - 300);
-      await sleep(200);
+      await sleep(350);
+      window.scrollTo(0, currentHeight - 250);
+      await sleep(150);
       window.scrollTo(0, document.body.scrollHeight);
-      await sleep(800);
-      
+      await sleep(450);
+
       scrollCount++;
-      
-      // Check if page height increased (new content loaded)
+
       if (document.body.scrollHeight === lastHeight) {
         stableCount++;
       } else {
@@ -297,9 +326,9 @@
         lastHeight = document.body.scrollHeight;
       }
     }
-    
-    console.log('[Boring Mode] Scrolled ' + scrollCount + ' times, loaded ' + 
-          document.querySelectorAll('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"]').length + ' potential items');
+
+    console.log('[Boring Mode] Scrolled ' + scrollCount + ' times, loaded ' +
+                document.querySelectorAll('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"]').length + ' potential items');
   }
 
   // --- Detect page type and return data ---
@@ -319,7 +348,7 @@
     return { type: 'cart', origin: window.location.origin, items: extractCartItems() };
   } else {
     // Wait for the first batch of search-result cards to appear
-    await waitForSelector('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"], span.a-size-medium.a-color-base.a-text-normal', 6000);
+    await waitForSelector('[data-component-type="s-search-result"], [data-asin], h2 a[href*="/dp/"], span.a-size-medium.a-color-base.a-text-normal', 3500);
     // Scroll down to pull in lazy-loaded results
     await scrollAndCollect();
     // Scroll back to top so the template starts at the top
