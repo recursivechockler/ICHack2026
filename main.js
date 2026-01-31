@@ -93,7 +93,7 @@ function createWindow() {
   mainWindow.on("resize", resize);
 
   // Default page
-  view.webContents.loadURL("https://www.bbc.com/news");
+  view.webContents.loadURL("https://www.google.com");
 
   // Keep URL bar synced on navigation
   const sendUrlToUI = () => {

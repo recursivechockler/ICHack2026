@@ -77,6 +77,75 @@
     return urlParams.get('q') || '';
   }
 
+  // Check if input is a URL or search query (same logic as main browser)
+  function isUrl(input) {
+    const trimmed = input.trim();
+
+    // Already has protocol
+    if (/^https?:\/\//i.test(trimmed)) return true;
+
+    // Localhost or IP address
+    if (/^localhost(:\d+)?$/i.test(trimmed)) return true;
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(trimmed)) return true;
+
+    // Has domain extension (e.g., .com, .org, .co.uk)
+    if (/\.[a-z]{2,}(\/|$|:|\?|#)/i.test(trimmed)) return true;
+
+    // Simple domain without path (e.g., "example.com" or "bbc.co.uk")
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(trimmed)) return true;
+
+    return false;
+  }
+
+  // Render homepage with minimal search box
+  function renderHomepage() {
+    const overlay = document.createElement('div');
+    overlay.className = 'boring-overlay';
+    overlay.innerHTML = `
+      <div class="boring-container boring-homepage">
+        <div class="boring-search-home">
+          <form id="boring-search-form" class="boring-search-form">
+            <input
+              type="text"
+              id="boring-search-input"
+              class="boring-search-input-home"
+              placeholder="search"
+              autofocus
+            />
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.classList.add('boring-mode-active');
+    document.body.appendChild(overlay);
+
+    // Add smart search/URL detection
+    const form = document.getElementById('boring-search-form');
+    const input = document.getElementById('boring-search-input');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = input.value.trim();
+
+      if (!value) return;
+
+      let targetUrl;
+      if (isUrl(value)) {
+        // It's a URL - navigate directly
+        targetUrl = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+      } else {
+        // It's a search query - use current search engine
+        const query = encodeURIComponent(value);
+        targetUrl = `${window.location.origin}/search?q=${query}`;
+      }
+
+      window.location.href = targetUrl;
+    });
+
+    console.log('[Boring Mode] Homepage rendered');
+  }
+
   // Render search results view
   function renderSearchResults(results, query) {
     const overlay = document.createElement('div');
@@ -84,7 +153,7 @@
     overlay.innerHTML = `
       <div class="boring-container">
         <div class="boring-header">
-          <h1 class="boring-title">Search Results</h1>
+          <h1 class="boring-title">search results</h1>
           <p class="boring-subtitle">${escapeHtml(query)} • ${results.length} results</p>
         </div>
 
@@ -102,7 +171,7 @@
 
         ${results.length === 0 ? `
           <div class="boring-empty">
-            <p>No results found. The page might still be loading - try refreshing.</p>
+            <p>no results found. the page might still be loading - try refreshing.</p>
           </div>
         ` : ''}
       </div>
@@ -120,17 +189,28 @@
     return div.innerHTML;
   }
 
+  // Check if we're on the homepage or search results page
+  function isHomepage() {
+    return !getSearchQuery();
+  }
+
   // Main initialization
   function init() {
     // Remove any existing overlay
     const existingOverlay = document.querySelector('.boring-overlay');
     if (existingOverlay) existingOverlay.remove();
 
-    console.log('[Boring Mode] Extracting search results...');
-    const results = extractSearchResults();
-    const query = getSearchQuery();
-
-    renderSearchResults(results, query);
+    if (isHomepage()) {
+      // Show minimal search box on homepage
+      console.log('[Boring Mode] Rendering homepage...');
+      renderHomepage();
+    } else {
+      // Show search results
+      console.log('[Boring Mode] Extracting search results...');
+      const results = extractSearchResults();
+      const query = getSearchQuery();
+      renderSearchResults(results, query);
+    }
   }
 
   // Run after page loads

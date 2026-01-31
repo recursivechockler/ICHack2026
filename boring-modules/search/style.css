@@ -2,6 +2,44 @@
  * Search Results Boring Mode CSS
  */
 
+/* Homepage - centered search box */
+.boring-homepage {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+}
+
+.boring-search-home {
+  width: 100% !important;
+  max-width: 600px !important;
+  padding: 2rem !important;
+}
+
+.boring-search-form {
+  width: 100% !important;
+}
+
+.boring-search-input-home {
+  width: 100% !important;
+  padding: 1rem 1.5rem !important;
+  font-size: 1.125rem !important;
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  color: var(--fg) !important;
+  outline: none !important;
+  transition: border-color 150ms !important;
+}
+
+.boring-search-input-home:focus {
+  border-color: var(--hover-border) !important;
+}
+
+.boring-search-input-home::placeholder {
+  color: var(--muted-fg) !important;
+}
+
 /* Search results container */
 .boring-search-results {
   display: flex !important;
