@@ -11,6 +11,7 @@ function getSiteModule(hostname) {
   if (hostname.includes("youtube.com")) return "youtube";
   if (hostname.includes("bbc.com") || hostname.includes("bbc.co.uk")) return "news";
   if (hostname.includes("theguardian.com")) return "news";
+  if (hostname.includes("amazon.co.uk") || hostname.includes("amazon.com")) return "amazon";
   if (hostname.includes("asos.com")) return "shopping";
   if (hostname.includes("zara.com")) return "shopping";
   return null;
