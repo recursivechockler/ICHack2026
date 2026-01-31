@@ -4,7 +4,15 @@ const fs = require("fs");
 
 let mainWindow = null;
 let view = null;
+let loaderView = null;
+let loaderVisible = false;
+let loaderTimeoutId = null;
 let boringModeEnabled = true; // Boring mode on by default
+
+function logMain(message, extra) {
+  if (extra) console.log(`[main] ${message}`, extra);
+  else console.log(`[main] ${message}`);
+}
 
 // Site detection - maps hostnames to module names
 function getSiteModule(hostname) {
@@ -14,6 +22,60 @@ function getSiteModule(hostname) {
   if (hostname.includes("asos.com")) return "shopping";
   if (hostname.includes("zara.com")) return "shopping";
   return null;
+}
+
+function shouldShowBoringForUrl(url) {
+  if (!boringModeEnabled) return false;
+  try {
+    const hostname = new URL(url).hostname;
+    return Boolean(getSiteModule(hostname));
+  } catch {
+    return false;
+  }
+}
+
+function getViewBounds() {
+  if (!mainWindow) return { x: 0, y: 64, width: 0, height: 0 };
+  const [w, h] = mainWindow.getContentSize();
+  return { x: 0, y: 64, width: w, height: Math.max(0, h - 64) };
+}
+
+function showLoader() {
+  if (!mainWindow || !loaderView) return;
+  if (loaderVisible) {
+    loaderView.setBounds(getViewBounds());
+    return;
+  }
+  loaderVisible = true;
+  logMain("showLoader");
+  if (mainWindow.getBrowserViews().includes(loaderView)) {
+    mainWindow.removeBrowserView(loaderView);
+  }
+  mainWindow.addBrowserView(loaderView);
+  loaderView.setBounds(getViewBounds());
+
+  // Fail-safe: never let loader block forever.
+  if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
+  loaderTimeoutId = setTimeout(() => {
+    hideLoader();
+  }, 3000);
+}
+
+function hideLoader() {
+  if (!mainWindow || !loaderView) return;
+  if (!loaderVisible) return;
+  loaderVisible = false;
+  logMain("hideLoader");
+  mainWindow.removeBrowserView(loaderView);
+  if (loaderTimeoutId) {
+    clearTimeout(loaderTimeoutId);
+    loaderTimeoutId = null;
+  }
+}
+
+function showLoaderForUrl(url) {
+  if (shouldShowBoringForUrl(url)) showLoader();
+  else hideLoader();
 }
 
 function openReaderWindow(article, sourceUrl) {
@@ -70,19 +132,33 @@ function createWindow() {
     }
   });
 
+  loaderView = new BrowserView({
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  loaderView.webContents.loadFile(path.join(__dirname, "loading.html"));
+
   mainWindow.setBrowserView(view);
 
   const resize = () => {
-    const [w, h] = mainWindow.getContentSize();
-    // Top bar in index.html is 64px tall
-    view.setBounds({ x: 0, y: 64, width: w, height: h - 64 });
+    const bounds = getViewBounds();
+    view.setBounds(bounds);
+    if (loaderVisible) loaderView.setBounds(bounds);
   };
 
   resize();
   mainWindow.on("resize", resize);
 
   // Default page
-  view.webContents.loadURL("https://www.bbc.com/news");
+  const defaultUrl = "https://www.bbc.com/news";
+  showLoaderForUrl(defaultUrl);
+  view.webContents.loadURL(defaultUrl);
+
+  view.webContents.on("console-message", (_evt, level, message, line, sourceId) => {
+    console.log(`[view:${level}] ${message} (${sourceId}:${line})`);
+  });
 
   // Keep URL bar synced on navigation
   const sendUrlToUI = () => {
@@ -94,33 +170,55 @@ function createWindow() {
   view.webContents.on("did-navigate-in-page", sendUrlToUI);
   view.webContents.on("did-finish-load", sendUrlToUI);
 
+  view.webContents.on("did-start-navigation", (_evt, url, _isInPlace, isMainFrame) => {
+    if (!isMainFrame) return;
+    logMain("did-start-navigation", { url });
+    showLoaderForUrl(url);
+  });
+
+  view.webContents.on("did-navigate-in-page", (_evt, url, isMainFrame) => {
+    if (!isMainFrame) return;
+    logMain("did-navigate-in-page", { url });
+    showLoaderForUrl(url);
+  });
+
+  view.webContents.on("did-start-loading", () => {
+    const url = view.webContents.getURL();
+    logMain("did-start-loading", { url });
+    if (url) showLoaderForUrl(url);
+  });
+
   // Boring mode injection system
-  const injectBoringMode = () => {
+  const injectBoringMode = async () => {
     if (!boringModeEnabled || !view) return;
 
-    const url = view.webContents.getURL();
-    const hostname = new URL(url).hostname;
+    try {
+      const url = view.webContents.getURL();
+      const hostname = new URL(url).hostname;
 
-    // Inject global boring mode CSS
-    const globalCSS = fs.readFileSync(path.join(__dirname, "boring-modules", "global.css"), "utf8");
-    view.webContents.insertCSS(globalCSS);
+      // Inject global boring mode CSS
+      const globalCSS = fs.readFileSync(path.join(__dirname, "boring-modules", "global.css"), "utf8");
+      await view.webContents.insertCSS(globalCSS);
 
-    // Determine which site module to use
-    const siteModule = getSiteModule(hostname);
-    if (siteModule) {
-      // Inject site-specific CSS
-      const cssPath = path.join(__dirname, "boring-modules", siteModule, "style.css");
-      if (fs.existsSync(cssPath)) {
-        const siteCSS = fs.readFileSync(cssPath, "utf8");
-        view.webContents.insertCSS(siteCSS);
+      // Determine which site module to use
+      const siteModule = getSiteModule(hostname);
+      if (siteModule) {
+        // Inject site-specific CSS
+        const cssPath = path.join(__dirname, "boring-modules", siteModule, "style.css");
+        if (fs.existsSync(cssPath)) {
+          const siteCSS = fs.readFileSync(cssPath, "utf8");
+          await view.webContents.insertCSS(siteCSS);
+        }
+
+        // Inject site-specific JS
+        const jsPath = path.join(__dirname, "boring-modules", siteModule, "inject.js");
+        if (fs.existsSync(jsPath)) {
+          const siteJS = fs.readFileSync(jsPath, "utf8");
+          view.webContents.executeJavaScript(siteJS);
+        }
       }
-
-      // Inject site-specific JS
-      const jsPath = path.join(__dirname, "boring-modules", siteModule, "inject.js");
-      if (fs.existsSync(jsPath)) {
-        const siteJS = fs.readFileSync(jsPath, "utf8");
-        view.webContents.executeJavaScript(siteJS);
-      }
+    } catch (err) {
+      console.error("Failed to inject boring mode:", err);
     }
   };
 
@@ -142,22 +240,49 @@ app.on("activate", () => {
 // ---- IPC from UI (address bar/buttons) ----
 
 ipcMain.on("nav:go", (_evt, url) => {
-  if (!view) return;
+  if (!view || !url) return;
   try {
     const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    showLoaderForUrl(normalized);
     view.webContents.loadURL(normalized);
   } catch (e) {
     console.error("Bad URL:", e);
   }
 });
 
-ipcMain.on("nav:back", () => view?.webContents.goBack());
-ipcMain.on("nav:forward", () => view?.webContents.goForward());
-ipcMain.on("nav:reload", () => view?.webContents.reload());
+ipcMain.on("nav:back", () => {
+  const currentUrl = view?.webContents.getURL();
+  if (currentUrl) showLoaderForUrl(currentUrl);
+  view?.webContents.goBack();
+});
+ipcMain.on("nav:forward", () => {
+  const currentUrl = view?.webContents.getURL();
+  if (currentUrl) showLoaderForUrl(currentUrl);
+  view?.webContents.goForward();
+});
+ipcMain.on("nav:reload", () => {
+  const currentUrl = view?.webContents.getURL();
+  if (currentUrl) showLoaderForUrl(currentUrl);
+  view?.webContents.reload();
+});
 
 ipcMain.on("reader:extract", () => {
   if (!view) return;
   view.webContents.send("extract-article");
+});
+
+ipcMain.on("boring:pre-navigate", (_evt, url) => {
+  if (!url) return;
+  logMain("boring:pre-navigate", { url });
+  showLoaderForUrl(url);
+});
+
+ipcMain.on("boring:overlay-ready", (_evt, url) => {
+  const targetUrl = url || view?.webContents.getURL();
+  logMain("boring:overlay-ready", { url, targetUrl });
+  if (!targetUrl) return;
+  if (!shouldShowBoringForUrl(targetUrl)) return;
+  hideLoader();
 });
 
 // Receive extracted article from the BrowserView preload
@@ -178,11 +303,13 @@ ipcMain.on("boring:toggle", () => {
   boringModeEnabled = !boringModeEnabled;
   mainWindow?.webContents.send("ui:boring-state", boringModeEnabled);
 
-  if (boringModeEnabled) {
-    // Re-inject when turning on
+  if (!boringModeEnabled) {
+    hideLoader();
     view?.webContents.reload();
-  } else {
-    // Reload page to clear injected styles when turning off
-    view?.webContents.reload();
+    return;
   }
+
+  const currentUrl = view?.webContents.getURL();
+  if (currentUrl) showLoaderForUrl(currentUrl);
+  view?.webContents.reload();
 });

@@ -149,6 +149,9 @@
 
     document.body.classList.add('boring-mode-active');
     document.body.appendChild(overlay);
+    if (window.boringAPI && typeof window.boringAPI.overlayReady === 'function') {
+      window.boringAPI.overlayReady();
+    }
     console.log(`[Boring Mode] Product grid rendered (${products.length} products)`);
   }
 
@@ -158,7 +161,7 @@
     overlay.className = 'boring-overlay';
     overlay.innerHTML = `
       <div class="boring-container">
-        <button class="boring-back" onclick="history.back()">
+        <button class="boring-back" type="button">
           ← Back to products
         </button>
 
@@ -167,7 +170,7 @@
           <h1 class="boring-product-name">${escapeHtml(product.name)}</h1>
           <div class="boring-product-price">${escapeHtml(product.price)}</div>
 
-          <button class="boring-button boring-button-primary" onclick="window.open('${product.url}', '_blank')">
+          <button class="boring-button boring-button-primary" type="button" data-url="${escapeHtml(product.url)}">
             View on original site to purchase
           </button>
 
@@ -183,6 +186,24 @@
 
     document.body.classList.add('boring-mode-active');
     document.body.appendChild(overlay);
+    if (window.boringAPI && typeof window.boringAPI.overlayReady === 'function') {
+      window.boringAPI.overlayReady();
+    }
+    const backBtn = overlay.querySelector('.boring-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.history.back();
+      });
+    }
+    const purchaseBtn = overlay.querySelector('.boring-button-primary');
+    if (purchaseBtn) {
+      purchaseBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        const url = purchaseBtn.getAttribute('data-url');
+        if (url) window.open(url, '_blank');
+      });
+    }
     console.log('[Boring Mode] Product detail rendered');
   }
 

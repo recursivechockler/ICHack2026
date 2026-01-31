@@ -135,7 +135,7 @@
     overlay.className = 'boring-overlay';
     overlay.innerHTML = `
       <div class="boring-container">
-        <button class="boring-back" onclick="history.back()">
+        <button class="boring-back" type="button">
           ← Back to videos
         </button>
 
@@ -167,6 +167,16 @@
 
     document.body.classList.add('boring-mode-active');
     document.body.appendChild(overlay);
+    if (window.boringAPI && typeof window.boringAPI.overlayReady === 'function') {
+      window.boringAPI.overlayReady();
+    }
+    const backBtn = overlay.querySelector('.boring-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.history.back();
+      });
+    }
     console.log('[Boring Mode] Video player rendered');
   }
 
@@ -207,6 +217,9 @@
 
     document.body.classList.add('boring-mode-active');
     document.body.appendChild(overlay);
+    if (window.boringAPI && typeof window.boringAPI.overlayReady === 'function') {
+      window.boringAPI.overlayReady();
+    }
     console.log(`[Boring Mode] Video grid rendered (${videos.length} videos)`);
   }
 
