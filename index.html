@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Anti-Dopamine Browser</title>
+    <style>
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+      .bar {
+        height: 64px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid #e6e6e6;
+        background: #fafafa;
+        box-sizing: border-box;
+      }
+      button {
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      button:hover { background: #f2f2f2; }
+      input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        font-size: 14px;
+        outline: none;
+        background: white;
+      }
+      .pill {
+        border-radius: 999px;
+        font-weight: 700;
+      }
+      .toast {
+        position: fixed;
+        top: 72px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #111;
+        color: #fff;
+        padding: 10px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease;
+      }
+      .toast.show { opacity: 0.92; }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <button id="back" title="Back">←</button>
+      <button id="forward" title="Forward">→</button>
+      <button id="reload" title="Reload">⟳</button>
+      <input id="url" placeholder="Enter URL (e.g. bbc.com/news)" />
+      <button id="go" class="pill">Go</button>
+      <button id="reader" class="pill">Reader Mode</button>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="ui.js"></script>
+  </body>
+</html>
